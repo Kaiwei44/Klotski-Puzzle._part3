@@ -1,6 +1,7 @@
 package model;
 
 import java.util.Arrays;
+import java.util.Stack;
 
 /**
  * MapModel 管理华容道棋盘的状态，包括原始矩阵、当前矩阵和唯一ID标记。
@@ -132,4 +133,77 @@ public class MapModel {
         }
     }
 
+    public void setUniqueIds(int[][] uniqueIds) {
+        for (int i = 0; i < uniqueIds.length; i++) {
+            this.uniqueIds[i] = Arrays.copyOf(uniqueIds[i], uniqueIds[i].length);
+        }
+    }
+
+    public synchronized int[] getEmptyPosition() {
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                if (matrix[i][j] == 0) {
+                    return new int[]{i, j};
+                }
+            }
+        }
+        return null;
+    }
+
+    // 生成当前状态的哈希值（用于去重）
+    public synchronized long getStateHash() {
+        long hash = 0;
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                hash = 31 * hash + matrix[i][j];
+            }
+        }
+        return hash;
+    }
+
+    // 记录移动历史（用于回退）
+    private final Stack<int[][]> moveHistory = new Stack<>();
+
+    // 保存当前状态到历史记录
+    public synchronized void saveState() {
+        int[][] copy = new int[height][width];
+        for (int i = 0; i < height; i++) {
+            System.arraycopy(matrix[i], 0, copy[i], 0, width);
+        }
+        moveHistory.push(copy);
+    }
+
+    // 回退到上一步
+    public synchronized boolean undo() {
+        if (!moveHistory.isEmpty()) {
+            matrix = moveHistory.pop();
+            return true;
+        }
+        return false;
+    }
+
+    // 复制矩阵的方法
+    public int[][] getMatrixCopy() {
+        int[][] copy = new int[getHeight()][getWidth()];
+        for (int i = 0; i < getHeight(); i++) {
+            System.arraycopy(this.matrix[i], 0, copy[i], 0, getWidth());
+        }
+        return copy;
+    }
+
+    public synchronized int[][] getUniqueIdsMatrix() {
+        int[][] copy = new int[height][width];
+        for (int i = 0; i < height; i++) {
+            System.arraycopy(uniqueIds[i], 0, copy[i], 0, width);
+        }
+        return copy;
+    }
+
+    public synchronized void restoreState(int[][] matrix, int[][] uniqueIds) {
+        // 深度拷贝恢复
+        for (int i = 0; i < height; i++) {
+            System.arraycopy(matrix[i], 0, this.matrix[i], 0, width);
+            System.arraycopy(uniqueIds[i], 0, this.uniqueIds[i], 0, width);
+        }
+    }
 }

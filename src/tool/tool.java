@@ -16,17 +16,25 @@ public class tool {
     public static BufferedImage ZHAOYUN_IMAGE;
     public static BufferedImage HUANGZHONG_IMAGE;
     public static BufferedImage MACHAO_IMAGE;
-    public static BufferedImage SOLDIER_IMAGE;
+    public static BufferedImage SOLDIER1_IMAGE;
+    public static BufferedImage SOLDIER2_IMAGE;
+    public static BufferedImage SOLDIER3_IMAGE;
+    public static BufferedImage SOLDIER4_IMAGE;
 
     static {
         try {
-            CAOCAO_IMAGE = ImageIO.read(tool.class.getResource("/resources/Caocao.jpg"));
-            GUANYU_IMAGE = ImageIO.read(tool.class.getResource("/resources/Guanyu.jpg"));
-            ZHAOYUN_IMAGE = ImageIO.read(tool.class.getResource("/resources/Zhaoyun.jpg"));
-            ZHANGFEI_IMAGE = ImageIO.read(tool.class.getResource("/resources/Zhangfei.jpg"));
-            HUANGZHONG_IMAGE = ImageIO.read(tool.class.getResource("/resources/Huangzhong.jpg"));
-            MACHAO_IMAGE = ImageIO.read(tool.class.getResource("/resources/Machao.jpg"));
-            SOLDIER_IMAGE = ImageIO.read(tool.class.getResource("/resources/Soldier.jpg"));
+            CAOCAO_IMAGE = ImageIO.read(tool.class.getResource("/resources/caocao.bmp"));
+            GUANYU_IMAGE = ImageIO.read(tool.class.getResource("/resources/guanyu.bmp"));
+            ZHAOYUN_IMAGE = ImageIO.read(tool.class.getResource("/resources/zhaoyun.bmp"));
+            ZHANGFEI_IMAGE = ImageIO.read(tool.class.getResource("/resources/zhangfei.bmp"));
+            HUANGZHONG_IMAGE = ImageIO.read(tool.class.getResource("/resources/huangzhong.bmp"));
+            MACHAO_IMAGE = ImageIO.read(tool.class.getResource("/resources/machao.bmp"));
+
+            SOLDIER1_IMAGE = ImageIO.read(tool.class.getResource("/resources/soldier1.bmp"));
+            SOLDIER2_IMAGE = ImageIO.read(tool.class.getResource("/resources/soldier2.bmp"));
+            SOLDIER3_IMAGE = ImageIO.read(tool.class.getResource("/resources/soldier3.bmp"));
+            SOLDIER4_IMAGE = ImageIO.read(tool.class.getResource("/resources/soldier4.bmp"));
+
             BACKGROUND = ImageIO.read(tool.class.getResource("/resources/background.png"));
 
         } catch (IOException e) {

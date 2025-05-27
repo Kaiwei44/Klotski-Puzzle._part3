@@ -1,11 +1,13 @@
 package view.game;
 
 import controller.GameController;
+import model.Direction;
 import model.MapModel;
 import model.UserManager;
 import model.UserManager.GameState;
 import tool.tool;
 import view.FrameUtil;
+import tool.MusicUtil;
 
 import javax.swing.*;
 import java.awt.*;
@@ -20,6 +22,7 @@ public class GameFrame extends JFrame {
     private JButton restartBtn;
     private JButton loadBtn;
     private JButton saveBtn;
+    private JButton hintBtn;
     private final String currentUser;
     private final UserManager userManager;
     private MapModel mapModel;
@@ -45,6 +48,15 @@ public class GameFrame extends JFrame {
         setLayout(null);
         setSize(width, height);
         getContentPane().setBackground(Color.LIGHT_GRAY);
+        MusicUtil.playBGM("/resources/bgm.wav");
+
+        // 设置窗口关闭时的监听器
+        this.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                MusicUtil.stopBGM();
+            }
+        });
 
         // 关卡选择
         String[] levels = {
@@ -77,11 +89,37 @@ public class GameFrame extends JFrame {
                 new Point(gamePanel.getPanelWidth() + 80, 120),
                 150, 50);
         restartBtn.addActionListener(e -> {
+            controller.clearUndoStack();
             mapModel.setMatrix(originalMatrix);
             totallyReset();
             gamePanel.requestFocusInWindow();
         });
         add(restartBtn);
+
+        JButton undoBtn = FrameUtil.createButton(this, "Undo",
+                new Point(gamePanel.getPanelWidth() + 80, 330), 150, 50);
+        undoBtn.addActionListener(e -> {
+            controller.undo();
+            gamePanel.requestFocusInWindow();
+        });
+        add(undoBtn);
+
+        hintBtn = FrameUtil.createButton(this,
+                "Hint",
+                new Point(gamePanel.getPanelWidth() + 80, 330), // 调整Y坐标避免重叠
+                150, 50);
+        hintBtn.addActionListener(e -> {  // 正确的事件监听器位置
+            Direction hint = controller.getHint();
+            if (hint != null) {
+                showHintAnimation(hint);
+            } else {
+                JOptionPane.showMessageDialog(this,
+                        "No available hint!",
+                        "Hint",
+                        JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
+        add(hintBtn);
 
         // 仅登录用户模式下，显示 Load/Save
         if (userManager != null && currentUser != null) {
@@ -184,5 +222,9 @@ public class GameFrame extends JFrame {
 
     public GamePanel getGamePanel() {
         return gamePanel;
+    }
+
+    private void showHintAnimation(Direction dir) {
+        new ArrowOverlay(dir).startAnimation();
     }
 }

@@ -4,9 +4,24 @@ import model.Direction;
 import model.MapModel;
 import view.game.GamePanel;
 
+import java.util.Stack;
+
 public class GameController {
     private final GamePanel view;
     private final MapModel model;
+    private Stack<UndoState> undoStack = new Stack<>();
+
+    private static class UndoState {
+        int[][] matrix;
+        int[][] uniqueIds;
+        int steps;
+
+        UndoState(int[][] matrix, int[][] uniqueIds, int steps) {
+            this.matrix = matrix;
+            this.uniqueIds = uniqueIds;
+            this.steps = steps;
+        }
+    }
 
     public GameController(GamePanel view, MapModel model) {
         this.view = view;
@@ -48,7 +63,35 @@ public class GameController {
         }
 
         // 执行移动
-        return performMove(row, col, newRow, newCol, currentWidth, currentHeight, currentUniqueId);
+        if(performMove(row, col, newRow, newCol, currentWidth, currentHeight, currentUniqueId)) {
+            saveCurrentState(); // 保存状态
+            return true;
+        }
+        return false;
+    }
+
+    // 保存当前状态
+    private void saveCurrentState() {
+        int[][] matrix = model.getMatrix();
+        int[][] uniqueIds = model.getUniqueIdsMatrix();
+        int steps = view.getSteps();
+        undoStack.push(new UndoState(matrix, uniqueIds, steps));
+    }
+
+    // 执行撤销操作
+    public void undo() {
+        if (undoStack.isEmpty()) return;
+
+        UndoState state = undoStack.pop();
+        // 原子化恢复操作
+        model.restoreState(state.matrix, state.uniqueIds); // 新增模型方法
+        view.setSteps(state.steps);
+        view.reset(); // 使用标准方法
+    }
+
+    // 清空撤销栈
+    public void clearUndoStack() {
+        undoStack.clear();
     }
 
     // 判断方块完整 ID，用于确认 2x1、1x2、2x2 大小
@@ -190,5 +233,32 @@ public class GameController {
 
     private int getCurrentHeight(int id) {
         return (id >= 3 && id <= 7) ? 2 : 1;
+    }
+
+    public boolean simulateMove(int row, int col, Direction dir) {
+        int currentId = getCompleteBoxId(row, col);
+        if (currentId == 0) return false;
+
+        int currentUniqueId = model.getUniqueId(row, col);
+        int currentWidth = getCurrentWidth(currentId);
+        int currentHeight = getCurrentHeight(currentId);
+
+        int newRow = row + dir.getRow();
+        int newCol = col + dir.getCol();
+
+        if (!isMoveValid(newRow, newCol, currentWidth, currentHeight, currentUniqueId)) {
+            return false;
+        }
+
+        BackupData backup = backupArea(row, col, currentWidth, currentHeight);
+        boolean success = performMove(row, col, newRow, newCol, currentWidth, currentHeight, currentUniqueId);
+        if (!success) {
+            restoreBackup(row, col, backup);
+        }
+        return success;
+    }
+
+    public Direction getHint() {
+        return HintSearcher.findNextMove(this.model);
     }
 }

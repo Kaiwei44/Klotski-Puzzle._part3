@@ -45,7 +45,6 @@ public class GamePanel extends ListenerPanel {
             }
         }
         int soldierId = 1;
-        bigBlockUniqueId = 1000; // 重置大块ID
 
         for (int i = 0; i < map.length; i++) {
             for (int j = 0; j < map[0].length; j++) {
@@ -54,7 +53,22 @@ public class GamePanel extends ListenerPanel {
                 Color boxColor = Color.GRAY; // 默认颜色
 
                 if (map[i][j] == 1) {  // 士兵块
-                    characterImage = tool.SOLDIER_IMAGE;
+                    switch (soldierId) {
+                        case 1:
+                            characterImage = tool.SOLDIER1_IMAGE;
+                            break;
+                        case 2:
+                            characterImage = tool.SOLDIER2_IMAGE;
+                            break;
+                        case 3:
+                            characterImage = tool.SOLDIER3_IMAGE;
+                            break;
+                        case 4:
+                            characterImage = tool.SOLDIER4_IMAGE;
+                            break;
+                        default:
+                            characterImage = tool.SOLDIER1_IMAGE;
+                    }
                     boxColor = Color.ORANGE;
                     box = new BoxComponent(boxColor, i, j, characterImage);
                     box.setSize(GRID_SIZE, GRID_SIZE);
@@ -150,11 +164,10 @@ public class GamePanel extends ListenerPanel {
             stepLabel.setText("Step: " + steps);
         }
     }
+
     public int getSteps() {
         return steps;
     }
-
-
 
     public void afterMove(int oldRow, int oldCol, int newRow, int newCol) {
         // 1. 更新步数显示
@@ -215,20 +228,15 @@ public class GamePanel extends ListenerPanel {
         }
     }
 
-    // 其他原有方法保持不变（reset, doMouseClick, doMoveRight等）...
-
     public void reset() {
+        // 保留步骤数（由调用方控制）
         this.removeAll();
         boxes.clear();
         selectedBox = null;
-        steps = 0;
-        if (stepLabel != null) {
-            stepLabel.setText("Step: 0");
-            this.add(stepLabel);
-        }
+
+        // 根据当前模型状态重新初始化
         initialGame();
         this.repaint();
-        this.requestFocusInWindow();
     }
 
     @Override
@@ -318,5 +326,43 @@ public class GamePanel extends ListenerPanel {
 
     public void setController(GameController controller) {
         this.controller = controller; // 确保类中有成员变量声明
+    }
+
+    public void highlightPath(List<Point> path) {
+        for (Point p : path) {
+            int row = p.x;
+            int col = p.y;
+            BoxComponent box = getBoxAt(row, col);
+            if (box != null) {
+                box.setBorder(BorderFactory.createLineBorder(Color.GREEN, 3));
+            }
+        }
+        repaint();
+    }
+
+    private BoxComponent getBoxAt(int row, int col) {
+        for (BoxComponent box : boxes) {
+            // 根据方块的坐标和尺寸进行判断
+            if (box.getRow() <= row && row < box.getRow() + box.getHeight() / GRID_SIZE &&
+                    box.getCol() <= col && col < box.getCol() + box.getWidth() / GRID_SIZE) {
+                return box;
+            }
+        }
+        return null;
+    }
+
+    public void setSteps(int steps) {
+        this.steps = steps;
+        stepLabel.setText("Step: " + steps);
+    }
+
+    private BufferedImage getSoldierImage(int uniqueId) {
+        // 根据uniqueId返回不同士兵图片（示例使用4种预设图片）
+        switch (uniqueId % 4) {
+            case 1: return tool.SOLDIER1_IMAGE;
+            case 2: return tool.SOLDIER2_IMAGE;
+            case 3: return tool.SOLDIER3_IMAGE;
+            default: return tool.SOLDIER4_IMAGE;
+        }
     }
 }
