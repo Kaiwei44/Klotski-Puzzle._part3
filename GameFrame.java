@@ -18,6 +18,7 @@ public class GameFrame extends JFrame {
     private GameController controller;
     private GamePanel gamePanel;
     private JLabel stepLabel;
+    private JLabel timeLabel;           // 用于显示计时的 JLabel
     private JComboBox<String> levelSelector;
     private JButton restartBtn;
     private JButton loadBtn;
@@ -28,20 +29,27 @@ public class GameFrame extends JFrame {
     private MapModel mapModel;
     private int currentSteps;
     private int[][] originalMatrix;
+    private int elapsedTime;            // 已用秒数
+    private Timer timer;                // Swing Timer 每秒 +1
 
-    // 保留无用户构造器，游客模式下不显示存档控件
+    // 保留游客模式构造器，游客模式下不显示存档控件，初始时间为 0
     public GameFrame(int width, int height, MapModel mapModel) {
-        this(width, height, mapModel, null, null, 0);
+        this(width, height, mapModel, null, null, 0, 0);
     }
 
-    public GameFrame(int width, int height, MapModel model, String user, UserManager um, int initialSteps) {
+    // 登录用户模式构造器：传入初始步数、初始时间
+    public GameFrame(int width, int height, MapModel model,
+                     String user, UserManager um,
+                     int initialSteps, int initialTime) {
         super("2025 CS109 Project Demo");
         this.mapModel = model;
         this.currentUser = user;
         this.userManager = um;
         this.currentSteps = initialSteps;
+        this.elapsedTime = initialTime;  // 从存档载入时传入的秒数
         initUI(width, height);
         initController();
+        startTimer();                   // 构造完成后，启动计时器
     }
 
     private void initUI(int width, int height) {
@@ -50,11 +58,19 @@ public class GameFrame extends JFrame {
         getContentPane().setBackground(Color.LIGHT_GRAY);
         MusicUtil.playBGM("/resources/bgm.wav");
 
-        // 设置窗口关闭时的监听器
+        // 设置窗口关闭时的监听器（除了停止BGM，还要自动存档）
         this.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
                 MusicUtil.stopBGM();
+                // 登录用户模式下自动存档：把当前 steps、matrix、elapsedTime 都存进去
+                if (userManager != null && currentUser != null) {
+                    userManager.saveState(currentUser,
+                            gamePanel.getSteps(),
+                            elapsedTime,
+                            mapModel.getMatrix());
+                }
+                super.windowClosing(e);
             }
         });
 
@@ -83,6 +99,14 @@ public class GameFrame extends JFrame {
                 180, 50);
         gamePanel.setStepLabel(stepLabel);
 
+        // 计时标签
+        timeLabel = FrameUtil.createJLabel(this,
+                formatTime(elapsedTime),
+                new Font("serif", Font.PLAIN, 20),
+                new Point(gamePanel.getPanelWidth() + 80, 20),
+                150, 40);
+        add(timeLabel);
+
         // 按钮：Restart
         restartBtn = FrameUtil.createButton(this,
                 "Restart",
@@ -92,11 +116,19 @@ public class GameFrame extends JFrame {
             controller.clearUndoStack();
             mapModel.setMatrix(originalMatrix);
             totallyReset();
+
+            // 重置步数与显示
+            currentSteps = 0;
+            updateStepLabel();
+
+            // 重置计时：归零
+            elapsedTime = 0;
+            updateTimeLabel();
             gamePanel.requestFocusInWindow();
         });
         add(restartBtn);
 
-        //撤销按钮
+        // 撤销按钮
         JButton undoBtn = FrameUtil.createButton(this, "Undo",
                 new Point(gamePanel.getPanelWidth() + 80, 330), 150, 50);
         undoBtn.addActionListener(e -> {
@@ -109,9 +141,9 @@ public class GameFrame extends JFrame {
 
         hintBtn = FrameUtil.createButton(this,
                 "Hint",
-                new Point(gamePanel.getPanelWidth() + 80, 330), // 调整Y坐标避免重叠
+                new Point(gamePanel.getPanelWidth() + 80, 390),
                 150, 50);
-        hintBtn.addActionListener(e -> {  // 正确的事件监听器位置
+        hintBtn.addActionListener(e -> {
             Direction hint = controller.getHint();
             if (hint != null) {
                 showHintAnimation(hint);
@@ -131,17 +163,35 @@ public class GameFrame extends JFrame {
                     new Point(gamePanel.getPanelWidth() + 80, 190),
                     150, 50);
             loadBtn.addActionListener(e -> {
-                GameState gs = userManager.loadState(currentUser);
-                if (gs != null && gs.matrix != null) {
+                UserManager.GameState gs = userManager.loadState(currentUser);
+                if (gs == null) {
+                    // 说明文件不存在或被解析出错，提示并直接返回
+                    JOptionPane.showMessageDialog(
+                            this,
+                            "无法加载存档（文件不存在或已损坏），请检查保存文件。",
+                            "加载失败",
+                            JOptionPane.WARNING_MESSAGE
+                    );
+                    return;
+                }
+                // 只有当 gs.matrix 非空才代表确实有可用的存档
+                if (gs.matrix == null) {
+                    JOptionPane.showMessageDialog(
+                            this,
+                            "当前账号暂无有效存档。",
+                            "加载信息",
+                            JOptionPane.INFORMATION_MESSAGE
+                    );
+                } else {
+                    // 矩阵合法，从存档恢复
                     mapModel.setMatrix(gs.matrix);
                     resetCurrentLevel();
+                    // 恢复步数
                     currentSteps = gs.steps;
                     updateStepLabel();
-                } else {
-                    JOptionPane.showMessageDialog(this,
-                            "No saved state found.",
-                            "Warning",
-                            JOptionPane.WARNING_MESSAGE);
+                    // 恢复时间
+                    elapsedTime = gs.time;
+                    updateTimeLabel();
                 }
                 gamePanel.requestFocusInWindow();
             });
@@ -154,28 +204,19 @@ public class GameFrame extends JFrame {
             saveBtn.addActionListener(e -> {
                 userManager.saveState(currentUser,
                         gamePanel.getSteps(),
+                        elapsedTime,
                         mapModel.getMatrix());
-                JOptionPane.showMessageDialog(this,
-                        "Game saved!",
-                        "Info",
-                        JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(
+                        this,
+                        "游戏已成功保存！",
+                        "保存成功",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
                 gamePanel.requestFocusInWindow();
             });
             add(saveBtn);
         }
 
-        // 自动保存（仅登录）
-        addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosing(WindowEvent e) {
-                if (userManager != null && currentUser != null) {
-                    userManager.saveState(currentUser,
-                            gamePanel.getSteps(),
-                            mapModel.getMatrix());
-                }
-                super.windowClosing(e);
-            }
-        });
 
         setLocationRelativeTo(null);
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
@@ -208,7 +249,10 @@ public class GameFrame extends JFrame {
         currentSteps = 0;
         totallyReset();
         updateStepLabel();
-        originalMatrix=matrix;
+        // 切换关卡时，也将计时归零
+        elapsedTime = 0;
+        updateTimeLabel();
+        originalMatrix = matrix;
     }
 
     private void resetCurrentLevel() {
@@ -223,6 +267,29 @@ public class GameFrame extends JFrame {
         gamePanel.setStepCount(currentSteps);
     }
 
+    private void updateTimeLabel() {
+        timeLabel.setText(formatTime(elapsedTime));
+    }
+
+    // 格式化秒数为 mm:ss，比如 83 -> "01:23"
+    private String formatTime(int totalSeconds) {
+        int m = totalSeconds / 60;
+        int s = totalSeconds % 60;
+        return String.format("Time: %02d:%02d", m, s);
+    }
+
+    // 启动 Swing Timer，让 elapsedTime 从 initialTime 开始每秒 +1
+    private void startTimer() {
+        if (timer != null && timer.isRunning()) {
+            timer.stop();
+        }
+        timer = new Timer(1000, e -> {
+            elapsedTime++;
+            updateTimeLabel();
+        });
+        timer.start();
+    }
+
     public GamePanel getGamePanel() {
         return gamePanel;
     }
@@ -231,3 +298,4 @@ public class GameFrame extends JFrame {
         new ArrowOverlay(dir).startAnimation();
     }
 }
+

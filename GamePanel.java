@@ -26,19 +26,26 @@ public class GamePanel extends ListenerPanel {
     public void fullUpdateFromModel(int steps) {
         // 1. 更新步数
         this.steps = steps;
-        if (stepLabel != null) {
-            stepLabel.setText("Step: " + steps);
+        Component[] components = this.getComponents();
+        for (Component comp : components) {
+            if (!(comp instanceof JLabel)){ // 保留标签组件
+                this.remove(comp);
+            }
         }
 
-        // 2. 清除当前所有方块
-        this.removeAll();
         boxes.clear();
         selectedBox = null;
 
         // 3. 根据当前模型状态重新初始化游戏
         initialGame();
 
-        // 4. 重新绘制
+        // 4. 更新步数标签文本
+        if (stepLabel != null) {
+            stepLabel.setText("Step: " + steps);
+        }
+
+        // 5. 重新绘制
+        this.revalidate();
         this.repaint();
     }
 
