@@ -10,6 +10,7 @@ public class GameController {
     private final GamePanel view;
     private final MapModel model;
     private Stack<UndoState> undoStack = new Stack<>();
+    private final Stack<UndoState> redoStack = new Stack<>();
 
     private static class UndoState {
         int[][] matrix;
@@ -26,7 +27,6 @@ public class GameController {
     public GameController(GamePanel view, MapModel model) {
         this.view = view;
         this.model = model;
-        // 将自身设置到视图，以便面板内调用 doMove
         view.setController(this);
     }
 
@@ -88,7 +88,12 @@ public class GameController {
 
     // 执行撤销操作
     public void undo() {
-        if (undoStack.isEmpty()) return;
+        if (undoStack.isEmpty()) {
+            return;
+        }
+
+        // 保存当前状态到 redo 栈
+        redoStack.push(new UndoState(model.getMatrix(), model.getUniqueIdsMatrix(), view.getSteps()));
 
         UndoState state = undoStack.pop();
         // 原子化恢复操作
@@ -98,9 +103,23 @@ public class GameController {
         view.fullUpdateFromModel(state.steps);
     }
 
+    // 添加 redo 方法
+    public void redo() {
+        if (redoStack.isEmpty()) {
+            return;
+        }
+        // 保存当前状态到 undo 栈
+        undoStack.push(new UndoState(model.getMatrix(), model.getUniqueIdsMatrix(), view.getSteps()));
+
+        UndoState state = redoStack.pop();
+        model.restoreState(state.matrix, state.uniqueIds);
+        view.fullUpdateFromModel(state.steps);
+    }
+
     // 清空撤销栈
     public void clearUndoStack() {
         undoStack.clear();
+        redoStack.clear();
     }
 
     // 判断方块完整 ID，用于确认 2x1、1x2、2x2 大小
@@ -267,7 +286,21 @@ public class GameController {
         return success;
     }
 
-    public Direction getHint() {
-        return HintSearcher.findNextMove(this.model);
+    public HintSearcher.HintResult getHint() {
+        try {
+            return new HintSearcher(this).findNextMove();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new HintSearcher.HintResult(Direction.NONE, -1, -1);
+        }
+    }
+
+    public MapModel getModel() {
+        return model;
+    }
+
+    public MapModel createModelFromGrid(int[][] grid) {
+        // 根据网格创建新的MapModel实例
+        return new MapModel(grid);
     }
 }

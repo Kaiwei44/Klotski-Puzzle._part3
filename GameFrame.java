@@ -1,6 +1,7 @@
 package view.game;
 
 import controller.GameController;
+import controller.HintSearcher;
 import model.Direction;
 import model.MapModel;
 import model.UserManager;
@@ -18,7 +19,7 @@ public class GameFrame extends JFrame {
     private GameController controller;
     private GamePanel gamePanel;
     private JLabel stepLabel;
-    private JLabel timeLabel;           // 用于显示计时的 JLabel
+    private JLabel timeLabel;
     private JComboBox<String> levelSelector;
     private JButton restartBtn;
     private JButton loadBtn;
@@ -30,7 +31,7 @@ public class GameFrame extends JFrame {
     private int currentSteps;
     private int[][] originalMatrix;
     private int elapsedTime;            // 已用秒数
-    private Timer timer;                // Swing Timer 每秒 +1
+    private Timer timer;
 
     // 保留游客模式构造器，游客模式下不显示存档控件，初始时间为 0
     public GameFrame(int width, int height, MapModel mapModel) {
@@ -47,6 +48,7 @@ public class GameFrame extends JFrame {
         this.userManager = um;
         this.currentSteps = initialSteps;
         this.elapsedTime = initialTime;  // 从存档载入时传入的秒数
+        this.originalMatrix = model.getMatrixCopy();
         initUI(width, height);
         initController();
         startTimer();                   // 构造完成后，启动计时器
@@ -57,6 +59,9 @@ public class GameFrame extends JFrame {
         setSize(width, height);
         getContentPane().setBackground(Color.LIGHT_GRAY);
         MusicUtil.playBGM("/resources/bgm.wav");
+        SwingUtilities.invokeLater(() -> {
+            gamePanel.requestFocusInWindow();
+        });
 
         // 设置窗口关闭时的监听器（除了停止BGM，还要自动存档）
         this.addWindowListener(new WindowAdapter() {
@@ -110,7 +115,7 @@ public class GameFrame extends JFrame {
         // 按钮：Restart
         restartBtn = FrameUtil.createButton(this,
                 "Restart",
-                new Point(gamePanel.getPanelWidth() + 80, 120),
+                new Point(gamePanel.getPanelWidth() + 120, 120),
                 150, 50);
         restartBtn.addActionListener(e -> {
             controller.clearUndoStack();
@@ -128,9 +133,8 @@ public class GameFrame extends JFrame {
         });
         add(restartBtn);
 
-        // 撤销按钮
         JButton undoBtn = FrameUtil.createButton(this, "Undo",
-                new Point(gamePanel.getPanelWidth() + 80, 330), 150, 50);
+                new Point(gamePanel.getPanelWidth() + 120, 200), 150, 50);
         undoBtn.addActionListener(e -> {
             controller.undo();
             gamePanel.revalidate();
@@ -139,22 +143,111 @@ public class GameFrame extends JFrame {
         });
         add(undoBtn);
 
+        JButton redoBtn = FrameUtil.createButton(this, "Redo",
+                new Point(gamePanel.getPanelWidth() + 120, 280), 150, 50);
+        redoBtn.addActionListener(e -> {
+            controller.redo();
+            gamePanel.revalidate();
+            gamePanel.repaint();
+            gamePanel.requestFocusInWindow();
+        });
+        add(redoBtn);
+
         hintBtn = FrameUtil.createButton(this,
                 "Hint",
-                new Point(gamePanel.getPanelWidth() + 80, 390),
+                new Point(gamePanel.getPanelWidth() + 120, 360), // 调整Y坐标避免重叠
                 150, 50);
+        // 修改hintBtn的事件监听器
         hintBtn.addActionListener(e -> {
-            Direction hint = controller.getHint();
-            if (hint != null) {
-                showHintAnimation(hint);
+            HintSearcher.HintResult hint = controller.getHint();
+
+            // 如果提示告诉我们“需要 undo”：
+            if (hint.isUndo) {
+                System.out.println("【提示】执行回退操作");
+                controller.undo();
+                gamePanel.repaint();
+                return;
+            }
+
+            if (hint.direction != Direction.NONE) {
+                // 1. 高亮要移动的方块 (row,col)
+                gamePanel.highlightBox(hint.boxRow, hint.boxCol);
+
+                // 2. 选中该方块
+                gamePanel.setSelectedBox(hint.boxRow, hint.boxCol);
+
+                // 3. 保存旧 row/col
+                int oldRow = hint.boxRow;
+                int oldCol = hint.boxCol;
+
+                // 4. 立刻调用 doMove 执行移动
+                boolean moveSuccess = controller.doMove(
+                        hint.boxRow,
+                        hint.boxCol,
+                        hint.direction
+                );
+
+                if (moveSuccess) {
+                    // 5. 计算落子后新坐标
+                    int newRow = oldRow + hint.direction.getRow();
+                    int newCol = oldCol + hint.direction.getCol();
+
+                    // 6. 通知面板更新（更新步数、重绘方块）
+                    gamePanel.afterMove(oldRow, oldCol, newRow, newCol);
+
+                    // 7. 保持新的方块选中状态
+                    gamePanel.setSelectedBox(newRow, newCol);
+                }
+
             } else {
                 JOptionPane.showMessageDialog(this,
-                        "No available hint!",
+                        "No hint available",
                         "Hint",
                         JOptionPane.INFORMATION_MESSAGE);
             }
+
+            // 保证面板拿到焦点
+            gamePanel.forceFocus();
         });
         add(hintBtn);
+
+        // 方向按钮
+        JButton upBtn = FrameUtil.createButton(this, "↑",
+                new Point(gamePanel.getPanelWidth() + 370, 180), 50, 50);
+        JButton leftBtn = FrameUtil.createButton(this, "←",
+                new Point(gamePanel.getPanelWidth() + 310, 250), 50, 50);
+        JButton downBtn = FrameUtil.createButton(this, "↓",
+                new Point(gamePanel.getPanelWidth() + 370, 320), 50, 50);
+        JButton rightBtn = FrameUtil.createButton(this, "→",
+                new Point(gamePanel.getPanelWidth() + 430, 250), 50, 50);
+
+        // 添加按钮事件
+        upBtn.addActionListener(e -> {
+            if (gamePanel.getSelectedBox() != null) {
+                gamePanel.doMoveUp();
+            }
+        });
+        downBtn.addActionListener(e -> {
+            if (gamePanel.getSelectedBox() != null) {
+                gamePanel.doMoveDown();
+            }
+        });
+        leftBtn.addActionListener(e -> {
+            if (gamePanel.getSelectedBox() != null) {
+                gamePanel.doMoveLeft();
+            }
+        });
+        rightBtn.addActionListener(e -> {
+            if (gamePanel.getSelectedBox() != null) {
+                gamePanel.doMoveRight();
+            }
+        });
+
+        // 将按钮添加到界面
+        add(upBtn);
+        add(downBtn);
+        add(leftBtn);
+        add(rightBtn);
 
         // 仅登录用户模式下，显示 Load/Save
         if (userManager != null && currentUser != null) {
@@ -217,7 +310,6 @@ public class GameFrame extends JFrame {
             add(saveBtn);
         }
 
-
         setLocationRelativeTo(null);
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         setVisible(true);
@@ -249,15 +341,17 @@ public class GameFrame extends JFrame {
         currentSteps = 0;
         totallyReset();
         updateStepLabel();
-        // 切换关卡时，也将计时归零
-        elapsedTime = 0;
-        updateTimeLabel();
-        originalMatrix = matrix;
+        originalMatrix=matrix;
+
+        SwingUtilities.invokeLater(() -> {
+            gamePanel.requestFocusInWindow();
+        });
     }
 
     private void resetCurrentLevel() {
         controller.restartGame();
     }
+
     private void totallyReset(){
         controller.totallyRestart();
     }
@@ -293,9 +387,4 @@ public class GameFrame extends JFrame {
     public GamePanel getGamePanel() {
         return gamePanel;
     }
-
-    private void showHintAnimation(Direction dir) {
-        new ArrowOverlay(dir).startAnimation();
-    }
 }
-

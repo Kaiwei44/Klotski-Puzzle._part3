@@ -206,4 +206,82 @@ public class MapModel {
             System.arraycopy(uniqueIds[i], 0, this.uniqueIds[i], 0, width);
         }
     }
+
+    // 添加canMove()方法
+    public synchronized boolean canMove(int row, int col, Direction dir) {
+        // 先判一下行列是否合法
+        if (!checkInHeightSize(row) || !checkInWidthSize(col)) return false;
+        int id = getId(row, col);
+        if (id == 0) return false;               // 空格上当然不能“移动”
+        int uniqueId = getUniqueId(row, col);
+
+        // 根据方块的 id 决定它究竟是 1x1 / 2x1 / 1x2 / 2x2
+        int width = (id == 2 || id == 7) ? 2 : 1;
+        int height = (id >= 3 && id <= 7)   ? 2 : 1;
+
+        int newRow = row + dir.getRow();
+        int newCol = col + dir.getCol();
+
+        // 边界检查
+        if (newRow < 0 || newRow + height > getHeight()) return false;
+        if (newCol < 0 || newCol + width  > getWidth())  return false;
+
+        // 检查目标区域所有格子
+        for (int r = newRow; r < newRow + height; r++) {
+            for (int c = newCol; c < newCol + width; c++) {
+                int targetId   = getId(r, c);
+                int targetUid  = getUniqueId(r, c);
+
+                // 情况 1：目标格子本身就是“自己方块”的一部分
+                if (targetUid == uniqueId && targetId == id) {
+                    // 允许：自己身体“滑动过去”的重叠区域
+                    continue;
+                }
+                // 情况 2：目标格子必须是空格
+                if (targetId == 0 && targetUid == 0) {
+                    continue;
+                }
+                // 其他一律不允许
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // 添加move()方法
+    public synchronized boolean move(int row, int col, Direction dir) {
+        // 先检查能否移动
+        if (!canMove(row, col, dir)) {
+            return false;
+        }
+
+        int id       = getId(row, col);
+        int uniqueId = getUniqueId(row, col);
+        int width    = (id == 2 || id == 7) ? 2 : 1;
+        int height   = (id >= 3 && id <= 7)   ? 2 : 1;
+
+        int newRow = row + dir.getRow();
+        int newCol = col + dir.getCol();
+
+        // 1. 清空“自己”原来位置的所有格子
+        for (int r = row; r < row + height; r++) {
+            for (int c = col; c < col + width; c++) {
+                if (getUniqueId(r, c) == uniqueId) {
+                    setId(r, c, 0);
+                    setUniqueId(r, c, 0);
+                }
+            }
+        }
+
+        // 2. 把相同的 id/uniqueId 写到新位置
+        for (int r = newRow; r < newRow + height; r++) {
+            for (int c = newCol; c < newCol + width; c++) {
+                setId(r, c, id);
+                setUniqueId(r, c, uniqueId);
+            }
+        }
+
+        return true;
+    }
 }
